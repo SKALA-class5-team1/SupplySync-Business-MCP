@@ -1,3 +1,7 @@
+/*
+ * [설정] 모든 HTTP 요청의 X-Internal-Api-Key 헤더를 검사하는 필터.
+ * 키가 없거나 틀리면 401로 막는다. 값은 .env의 INTERNAL_API_KEY.
+ */
 package com.example.rfq.businessmcp.config;
 
 import jakarta.servlet.FilterChain;
