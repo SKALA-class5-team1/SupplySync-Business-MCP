@@ -1,0 +1,26 @@
+server:
+  port: 8101
+  address: ${SERVER_ADDRESS:127.0.0.1}
+
+spring:
+  config:
+    import: optional:file:.env[.properties]
+  application:
+    name: business-mcp
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:supplysync}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+    hikari:
+      schema: ${DB_SCHEMA:public}
+      read-only: true
+      data-source-properties:
+        readOnlyMode: always
+  ai:
+    mcp:
+      server:
+        name: business-mcp
+        protocol: STREAMABLE
+
+internal:
+  api-key: ${INTERNAL_API_KEY}
