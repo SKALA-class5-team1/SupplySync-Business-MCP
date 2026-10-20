@@ -1,0 +1,30 @@
+{
+  "$comment": "SG4 정답. 담당자 ds_sales01(user_id 2) 승인 기준",
+  "approval": {
+    "decision": "APPROVED",
+    "approved_by": 2,
+    "notes": [
+      "보증 5년 수용 시 품질본부장 승인 필요 (제12조)",
+      "지연 배상 상한 10% 고객 협의 필요 (제13조)"
+    ]
+  },
+  "recheck": [
+    {
+      "part_id": "P-MCU-G1",
+      "available_at_sg2": 1500,
+      "available_now": 1500,
+      "changed": false
+    },
+    {
+      "part_id": "P-MCU-G1-ALT",
+      "available_at_sg2": 3000,
+      "available_now": 3000,
+      "changed": false
+    }
+  ],
+  "registration": {
+    "quote_id": "Q-2026-1019-001",
+    "status": "REGISTERED",
+    "rfq_status": "QUOTED"
+  }
+}

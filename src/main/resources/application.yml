@@ -1,3 +1,6 @@
+# [설정] 서버·DB·MCP·백엔드 설정. 값은 프로젝트 루트 .env에서 읽는다.
+# 포트 8101, MCP Streamable HTTP, DB 커넥션 읽기 전용, 백엔드 호출 타임아웃.
+
 server:
   port: 8101
   address: ${SERVER_ADDRESS:127.0.0.1}
@@ -8,14 +11,22 @@ spring:
   application:
     name: business-mcp
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:supplysync}
+    # Supabase 등 원격 DB는 DB_SSLMODE=require 권장 (기본 prefer: 서버가 지원하면 SSL)
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:supplysync}?sslmode=${DB_SSLMODE:prefer}
     username: ${DB_USER}
     password: ${DB_PASSWORD}
     hikari:
       schema: ${DB_SCHEMA:public}
+      # Supabase pooler(세션 모드)는 동시 연결 수가 제한되므로 작게 유지
+      maximum-pool-size: ${DB_POOL_SIZE:5}
       read-only: true
       data-source-properties:
         readOnlyMode: always
+  http:
+    client:
+      # 백엔드 API Tool의 호출 (RestClient)
+      connect-timeout: 3s
+      read-timeout: 10s
   ai:
     mcp:
       server:
@@ -24,3 +35,7 @@ spring:
 
 internal:
   api-key: ${INTERNAL_API_KEY}
+
+# 백엔드 API Tool(6~9)이 호출할 Spring 백엔드. 요청 헤더 키는 internal.api-key(INTERNAL_API_KEY)를 그대로 쓴다.
+backend:
+  url: ${BACKEND_URL:http://localhost:8080}

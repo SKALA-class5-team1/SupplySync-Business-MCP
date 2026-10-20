@@ -1,9 +1,12 @@
+/*
+ * [테스트] 서버 기본 설정 확인 (DB 연결 없이 실행).
+ * API 키 없는/틀린 요청 401, 올바른 키로 MCP 초기화, Tool 9개 등록, 읽기 전용 커넥션 설정.
+ */
 package com.example.rfq.businessmcp;
 
 import com.example.rfq.businessmcp.config.InternalApiKeyFilter;
 import com.zaxxer.hikari.HikariDataSource;
-import io.modelcontextprotocol.client.McpClient;
-import io.modelcontextprotocol.client.transport.HttpClientStreamableHttpTransport;
+import io.modelcontextprotocol.spec.McpSchema;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -21,9 +24,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
         "spring.config.import=",
-        "internal.api-key=test-internal-key",
+        "internal.api-key=" + McpTestClient.API_KEY,
         "DB_HOST=127.0.0.1", "DB_PORT=1", "DB_NAME=test",
-        "DB_USER=test-reader", "DB_PASSWORD=test-password", "DB_SCHEMA=test_schema"
+        "DB_USER=test-reader", "DB_PASSWORD=test-password", "DB_SCHEMA=test_schema", "DB_SSLMODE=prefer"
 })
 class BasicConfigurationTest {
     @LocalServerPort int port;
@@ -48,20 +51,18 @@ class BasicConfigurationTest {
     }
 
     @Test
-    void acceptsCorrectKeyAndExposesNoBusinessTools() {
-        var transport = HttpClientStreamableHttpTransport.builder("http://127.0.0.1:" + port)
-                .endpoint("/mcp")
-                .customizeRequest(builder -> builder.header("X-Internal-Api-Key", "test-internal-key"))
-                .build();
-        try (var client = McpClient.sync(transport).requestTimeout(Duration.ofSeconds(5)).build()) {
+    void acceptsCorrectKeyAndExposesBusinessTools() {
+        try (var client = McpTestClient.open(port, McpTestClient.API_KEY)) {
             assertThat(client.initialize().serverInfo().name()).isEqualTo("business-mcp");
-            assertThat(client.listTools().tools()).isEmpty();
+            assertThat(client.listTools().tools()).extracting(McpSchema.Tool::name).containsExactlyInAnyOrder(
+                    "get_models", "get_options", "get_bom", "check_parts_supply", "get_parts_cost",
+                    "save_review", "save_quote", "register_quote", "get_rfq_content");
         }
     }
 
     @Test
     void configuresReadOnlyPostgresConnections() {
-        assertThat(dataSource.getJdbcUrl()).isEqualTo("jdbc:postgresql://127.0.0.1:1/test");
+        assertThat(dataSource.getJdbcUrl()).isEqualTo("jdbc:postgresql://127.0.0.1:1/test?sslmode=prefer");
         assertThat(dataSource.getUsername()).isEqualTo("test-reader");
         assertThat(dataSource.getSchema()).isEqualTo("test_schema");
         assertThat(dataSource.isReadOnly()).isTrue();
