@@ -1,0 +1,8 @@
+{
+  "part_id": "P-HSG-AL",
+  "on_hand": 15000,
+  "allocated": 5000,
+  "available": 10000,
+  "incoming_qty": 8000,
+  "incoming_date": "2026-12-01"
+}

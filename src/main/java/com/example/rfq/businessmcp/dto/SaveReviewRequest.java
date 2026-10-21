@@ -9,23 +9,26 @@ import com.fasterxml.jackson.databind.annotation.JsonNaming;
 import java.util.List;
 import java.util.Map;
 
-/** PUT /internal/reviews/{thread_id} 본문. 해당 stage에 없는 필드는 null로 두고 전송하지 않는다. */
+/**
+ * PUT /internal/rfq-reviews 본문. 백엔드는 (rfq_number, thread_id)로 upsert하고 전달한 필드만 갱신하므로
+ * 해당 단계에 없는 필드는 null로 두고 전송하지 않는다. stage는 백엔드에 없는 값이라 보내지 않는다.
+ */
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record SaveReviewRequest(
-        String threadId,
         String rfqNumber,
-        String stage,
+        String threadId,
+        String status,
         String selectedModel,
         List<String> options,
         String fitType,
-        List<Object> issues,
-        List<Object> passedChecks,
-        List<Object> assumptions,
-        List<Object> customerQuestions,
-        List<Object> contractRisks,
-        List<Object> shortages,
-        List<Object> alternatives,
+        List<Map<String, Object>> issues,
+        List<String> passedChecks,
+        List<Map<String, Object>> assumptions,
+        List<String> customerQuestions,
+        List<Map<String, Object>> contractRisks,
+        List<Map<String, Object>> shortages,
+        List<Map<String, Object>> alternatives,
         String recommendedAlt,
         Map<String, Object> finalPlan) {
 }

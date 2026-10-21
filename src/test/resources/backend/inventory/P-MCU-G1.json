@@ -1,0 +1,8 @@
+{
+  "part_id": "P-MCU-G1",
+  "on_hand": 9000,
+  "allocated": 7500,
+  "available": 1500,
+  "incoming_qty": 5000,
+  "incoming_date": "2027-01-20"
+}

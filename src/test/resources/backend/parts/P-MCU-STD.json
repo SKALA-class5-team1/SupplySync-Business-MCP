@@ -1,0 +1,8 @@
+{
+  "part_id": "P-MCU-STD",
+  "part_name": "제어칩 (표준)",
+  "supplier": "세온반도체",
+  "unit_cost_krw": 3200,
+  "lead_time_days": 60,
+  "is_critical": true
+}

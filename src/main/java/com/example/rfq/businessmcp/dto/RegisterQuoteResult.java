@@ -1,5 +1,5 @@
 /*
- * [DTO] register_quote 출력 = 백엔드 응답 (quote_id, status, rfq_status, registered_at).
+ * [DTO] register_quote 출력 = 백엔드 응답 (quote_id, status, rfq_status, outcome).
  */
 package com.example.rfq.businessmcp.dto;
 
@@ -11,5 +11,5 @@ public record RegisterQuoteResult(
         String quoteId,
         String status,
         String rfqStatus,
-        String registeredAt) {
+        String outcome) {
 }

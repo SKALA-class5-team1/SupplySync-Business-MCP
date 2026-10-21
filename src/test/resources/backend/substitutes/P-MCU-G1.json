@@ -1,0 +1,13 @@
+[
+  {
+    "part_id": "P-MCU-G1",
+    "substitute_part_id": "P-MCU-G1-ALT",
+    "substitute_name": "제어칩 (고온용, 대체)",
+    "substitute_supplier": "누리칩스",
+    "validation_days": 14,
+    "pin_compatible": true,
+    "ref_chunk_id": "alt-002",
+    "unit_cost_diff_krw": 300,
+    "available_qty": 3000
+  }
+]
