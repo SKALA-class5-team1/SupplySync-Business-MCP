@@ -32,7 +32,12 @@ final class McpTestClient implements AutoCloseable {
 
     /** 초기화까지 마친 클라이언트. */
     static McpTestClient connect(int port) {
-        McpTestClient mcp = new McpTestClient(open(port, API_KEY));
+        return connect(port, API_KEY);
+    }
+
+    /** 다른 키로 접속 (실제 백엔드 연결 테스트는 .env의 INTERNAL_API_KEY를 쓴다). */
+    static McpTestClient connect(int port, String apiKey) {
+        McpTestClient mcp = new McpTestClient(open(port, apiKey));
         mcp.client.initialize();
         return mcp;
     }

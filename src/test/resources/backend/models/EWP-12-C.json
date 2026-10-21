@@ -1,0 +1,19 @@
+{
+  "model_id": "EWP-12-C",
+  "model_name": "대형 워터펌프",
+  "flow_lpm": 35.0,
+  "head_kpa": 100,
+  "voltage_min": 9.0,
+  "voltage_max": 16.0,
+  "temp_min": -40,
+  "temp_max": 125,
+  "ip_rating": "IP6K9K",
+  "noise_db": 48,
+  "comm": "LIN",
+  "size_lmm": 118,
+  "size_wmm": 98,
+  "size_hmm": 94,
+  "weight_kg": 0.95,
+  "base_price_krw": 45000,
+  "options": []
+}

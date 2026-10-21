@@ -1,0 +1,42 @@
+{
+  "model_id": "EWP-12-B",
+  "model_name": "중형 워터펌프",
+  "flow_lpm": 25.0,
+  "head_kpa": 80,
+  "voltage_min": 9.0,
+  "voltage_max": 16.0,
+  "temp_min": -40,
+  "temp_max": 110,
+  "ip_rating": "IP67",
+  "noise_db": 42,
+  "comm": "LIN,PWM",
+  "size_lmm": 110,
+  "size_wmm": 90,
+  "size_hmm": 90,
+  "weight_kg": 0.70,
+  "base_price_krw": 34000,
+  "options": [
+    {
+      "option_code": "OPT-HT",
+      "option_name": "고온 대응 (125℃)",
+      "changes_field": "temp_max",
+      "new_value": "125",
+      "add_weight_kg": 0.00,
+      "add_noise_db": 0,
+      "add_price_krw": 2400,
+      "replaces_part_id": "P-MCU-STD",
+      "uses_part_id": "P-MCU-G1"
+    },
+    {
+      "option_code": "OPT-IP9K",
+      "option_name": "방수 강화 (IP6K9K)",
+      "changes_field": "ip_rating",
+      "new_value": "IP6K9K",
+      "add_weight_kg": 0.05,
+      "add_noise_db": 1,
+      "add_price_krw": 900,
+      "replaces_part_id": "P-SEAL-STD",
+      "uses_part_id": "P-SEAL-9K"
+    }
+  ]
+}

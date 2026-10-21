@@ -1,0 +1,31 @@
+{
+  "model_id": "EWP-12-A",
+  "model_name": "소형 워터펌프",
+  "flow_lpm": 15.0,
+  "head_kpa": 50,
+  "voltage_min": 9.0,
+  "voltage_max": 16.0,
+  "temp_min": -40,
+  "temp_max": 105,
+  "ip_rating": "IP67",
+  "noise_db": 43,
+  "comm": "PWM",
+  "size_lmm": 100,
+  "size_wmm": 85,
+  "size_hmm": 80,
+  "weight_kg": 0.55,
+  "base_price_krw": 29000,
+  "options": [
+    {
+      "option_code": "OPT-HT",
+      "option_name": "고온 대응 (125℃)",
+      "changes_field": "temp_max",
+      "new_value": "125",
+      "add_weight_kg": 0.00,
+      "add_noise_db": 0,
+      "add_price_krw": 2400,
+      "replaces_part_id": "P-MCU-STD",
+      "uses_part_id": "P-MCU-G1"
+    }
+  ]
+}

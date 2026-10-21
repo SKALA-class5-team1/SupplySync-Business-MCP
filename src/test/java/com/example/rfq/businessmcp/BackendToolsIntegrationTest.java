@@ -41,11 +41,10 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
-/** 백엔드 API Tool(6~9): MockRestServiceServer로 백엔드를 흉내 내고 MCP tools/call로 확인한다. DB는 쓰지 않는다. */
+/** 백엔드 API Tool(6~9): MockRestServiceServer로 백엔드를 흉내 내고 MCP tools/call로 확인한다. */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
         "spring.config.import=",
         "internal.api-key=" + McpTestClient.API_KEY,
-        "DB_HOST=127.0.0.1", "DB_PORT=1", "DB_NAME=test", "DB_USER=test-reader", "DB_PASSWORD=test-password",
         "backend.url=http://backend.test"
 })
 @AutoConfigureMockRestServiceServer
@@ -82,7 +81,7 @@ class BackendToolsIntegrationTest {
             assertThat(hints.get(tool).destructiveHint()).as(tool).isFalse();
         }
         for (String tool : List.of("get_models", "get_options", "get_bom", "check_parts_supply", "get_parts_cost",
-                "get_rfq_content")) {
+                "get_rfq_content", "get_substitutes")) {
             assertThat(hints.get(tool).readOnlyHint()).as(tool).isTrue();
             assertThat(hints.get(tool).destructiveHint()).as(tool).isFalse();
         }

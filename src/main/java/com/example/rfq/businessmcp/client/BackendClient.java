@@ -51,30 +51,41 @@ public class BackendClient {
 
     public <T> T get(String uriTemplate, String uriVariable, Class<T> responseType,
                      Map<Integer, String> statusMessages) {
-        return send(HttpMethod.GET, uriTemplate, uriVariable, null, null, responseType, statusMessages);
+        return send(HttpMethod.GET, uriTemplate, uriVariable, null, null, null, responseType, statusMessages);
+    }
+
+    /** 쿼리 파라미터 하나를 붙인 GET. 값은 URI 변수로 넘겨 인코딩한다 (값 안의 {}·&가 템플릿·구분자로 해석되지 않도록). */
+    public <T> T get(String uriTemplate, String uriVariable, String queryName, String queryValue,
+                     Class<T> responseType, Map<Integer, String> statusMessages) {
+        return send(HttpMethod.GET, uriTemplate, uriVariable, Map.entry(queryName, queryValue), null, null,
+                responseType, statusMessages);
     }
 
     /** uriVariable이 없는 경로면 null을 넘긴다. */
     public <T> T put(String uriTemplate, String uriVariable, Object body, Class<T> responseType,
                      Map<Integer, String> statusMessages) {
-        return send(HttpMethod.PUT, uriTemplate, uriVariable, null, body, responseType, statusMessages);
+        return send(HttpMethod.PUT, uriTemplate, uriVariable, null, null, body, responseType, statusMessages);
     }
 
     public <T> T patch(String uriTemplate, String uriVariable, Object body, Class<T> responseType,
                        Map<Integer, String> statusMessages) {
-        return send(HttpMethod.PATCH, uriTemplate, uriVariable, null, body, responseType, statusMessages);
+        return send(HttpMethod.PATCH, uriTemplate, uriVariable, null, null, body, responseType, statusMessages);
     }
 
     public <T> T post(String uriTemplate, String uriVariable, String idempotencyKey, Object body,
                       Class<T> responseType, Map<Integer, String> statusMessages) {
-        return send(HttpMethod.POST, uriTemplate, uriVariable, idempotencyKey, body, responseType, statusMessages);
+        return send(HttpMethod.POST, uriTemplate, uriVariable, null, idempotencyKey, body, responseType,
+                statusMessages);
     }
 
-    /** idempotencyKey·body가 null이면 해당 헤더·본문을 보내지 않는다. */
-    private <T> T send(HttpMethod method, String uriTemplate, String uriVariable, String idempotencyKey,
-                       Object body, Class<T> responseType, Map<Integer, String> statusMessages) {
+    /** query·idempotencyKey·body가 null이면 해당 쿼리·헤더·본문을 보내지 않는다. */
+    private <T> T send(HttpMethod method, String uriTemplate, String uriVariable, Map.Entry<String, String> query,
+                       String idempotencyKey, Object body, Class<T> responseType,
+                       Map<Integer, String> statusMessages) {
         RestClient.RequestBodySpec request = restClient.method(method)
-                .uri(uriTemplate, uriVariable)
+                .uri(builder -> query == null
+                        ? builder.path(uriTemplate).build(uriVariable)
+                        : builder.path(uriTemplate).queryParam(query.getKey(), "{query}").build(uriVariable, query.getValue()))
                 .header("X-Internal-Api-Key", apiKey);
         if (idempotencyKey != null) {
             request.header("Idempotency-Key", idempotencyKey);

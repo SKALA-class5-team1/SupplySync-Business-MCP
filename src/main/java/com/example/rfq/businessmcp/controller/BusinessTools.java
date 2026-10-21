@@ -1,6 +1,6 @@
 /*
- * [Tool 진입점] DB 읽기 Tool 5개: get_models, get_options, get_bom, check_parts_supply, get_parts_cost.
- * Agent가 MCP로 호출하는 메서드와 한국어 설명을 정의하고, 실제 처리는 ProductService·SupplyService에 맡긴다.
+ * [Tool 진입점] 조회 Tool 6개: get_models, get_options, get_bom, check_parts_supply, get_parts_cost, get_substitutes.
+ * Agent가 MCP로 호출하는 메서드와 한국어 설명을 정의하고, 실제 처리(백엔드 조회 API 호출·변환)는 ProductService·SupplyService에 맡긴다.
  */
 package com.example.rfq.businessmcp.controller;
 
@@ -9,6 +9,7 @@ import com.example.rfq.businessmcp.dto.ModelOptions;
 import com.example.rfq.businessmcp.dto.ModelSpec;
 import com.example.rfq.businessmcp.dto.PartRequirement;
 import com.example.rfq.businessmcp.dto.PartsCostResult;
+import com.example.rfq.businessmcp.dto.SubstituteResult;
 import com.example.rfq.businessmcp.dto.SupplyCheckResult;
 import com.example.rfq.businessmcp.service.ProductService;
 import com.example.rfq.businessmcp.service.SupplyService;
@@ -19,7 +20,7 @@ import org.springaicommunity.mcp.annotation.McpToolParam;
 import org.springframework.stereotype.Component;
 
 /**
- * 읽기 Tool 진입점. 파라미터 이름이 그대로 MCP 입력 필드명이 되므로 snake_case로 둔다.
+ * 조회 Tool 진입점. 파라미터 이름이 그대로 MCP 입력 필드명이 되므로 snake_case로 둔다.
  * 잘못된 입력은 예외로 던지고, MCP 오류 결과(isError)로 반환된다.
  */
 @Component
@@ -100,5 +101,23 @@ public class BusinessTools {
             @McpToolParam(description = "적용할 옵션 코드 목록 (예: [\"OPT-HT\", \"OPT-IP9K\"]). 없으면 빈 배열",
                     required = false) List<String> options) {
         return productService.getPartsCost(model_id, options);
+    }
+
+    @McpTool(name = "get_substitutes", description = """
+            부품 하나의 대체 부품 후보를 반환한다. 후보마다 가용 수량, 단가와 원래 부품 대비 단가 차이, \
+            검증 기간과 검증 후 사용 가능일, 신규 발주 조달기간, 핀 호환 여부, 근거 청크 ID를 담는다. \
+            short_qty를 주면 후보 재고로 부족분을 채울 수 있는지(covers_shortage)도 계산한다. \
+            대안 비교 중 특정 부품의 대체 후보만 따로 볼 때 사용한다. 재고·납기 확인까지 필요하면 \
+            check_parts_supply를 쓴다(부족한 부품의 대체 부품을 같은 형식으로 함께 반환). \
+            후보가 없으면 substitutes가 빈 배열이다.""",
+            annotations = @McpAnnotations(readOnlyHint = true, destructiveHint = false, idempotentHint = true,
+                    openWorldHint = false))
+    public SubstituteResult getSubstitutes(
+            @McpToolParam(description = "원래 부품 ID (예: P-MCU-G1)") String part_id,
+            @McpToolParam(description = "부족 수량 (1 이상). 주면 covers_shortage 계산, 생략하면 null", required = false)
+            Integer short_qty,
+            @McpToolParam(description = "검토 기준일 (YYYY-MM-DD). 대체 부품 사용 가능일 계산 기준. "
+                    + "생략하면 오늘(Asia/Seoul)", required = false) String base_date) {
+        return supplyService.getSubstitutes(part_id, short_qty, base_date);
     }
 }

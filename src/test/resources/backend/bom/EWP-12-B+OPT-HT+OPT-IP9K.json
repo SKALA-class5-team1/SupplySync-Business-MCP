@@ -1,0 +1,47 @@
+{
+  "model_id": "EWP-12-B",
+  "options": [
+    "OPT-HT",
+    "OPT-IP9K"
+  ],
+  "items": [
+    {
+      "part_id": "P-CON-4P",
+      "part_name": "4핀 커넥터",
+      "qty_per_unit": 1,
+      "source": "BASE"
+    },
+    {
+      "part_id": "P-HSG-AL",
+      "part_name": "알루미늄 케이스",
+      "qty_per_unit": 1,
+      "source": "BASE"
+    },
+    {
+      "part_id": "P-IMP-25",
+      "part_name": "임펠러",
+      "qty_per_unit": 1,
+      "source": "BASE"
+    },
+    {
+      "part_id": "P-MTR-BL12",
+      "part_name": "모터",
+      "qty_per_unit": 1,
+      "source": "BASE"
+    },
+    {
+      "part_id": "P-MCU-G1",
+      "part_name": "제어칩 (고온용)",
+      "qty_per_unit": 1,
+      "source": "OPTION:OPT-HT",
+      "replaced_part_id": "P-MCU-STD"
+    },
+    {
+      "part_id": "P-SEAL-9K",
+      "part_name": "방수 실링 (강화)",
+      "qty_per_unit": 1,
+      "source": "OPTION:OPT-IP9K",
+      "replaced_part_id": "P-SEAL-STD"
+    }
+  ]
+}

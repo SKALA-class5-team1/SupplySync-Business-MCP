@@ -1,60 +1,35 @@
 /*
- * [서비스] 모델·옵션 조회, BOM 전개(옵션 부품 교체), 부품 원가 합계 계산.
- * get_models, get_options, get_bom, get_parts_cost가 사용한다. BOM 전개(expandBom)는 get_bom과 get_parts_cost가 공유한다.
+ * [서비스] 모델·옵션 조회, 옵션 적용 BOM 조회, 부품 원가 합계 계산. 데이터는 백엔드 조회 API에서 가져온다.
+ * get_models, get_options, get_bom, get_parts_cost가 사용한다. BOM 전개(옵션 부품 교체)는 백엔드가 하고, 이 서버는 다시 계산하지 않는다.
  */
 package com.example.rfq.businessmcp.service;
 
+import com.example.rfq.businessmcp.client.CatalogClient;
+import com.example.rfq.businessmcp.dto.BackendCatalog.Bom;
+import com.example.rfq.businessmcp.dto.BackendCatalog.BomLine;
+import com.example.rfq.businessmcp.dto.BackendCatalog.Model;
 import com.example.rfq.businessmcp.dto.BomPart;
 import com.example.rfq.businessmcp.dto.BomResult;
 import com.example.rfq.businessmcp.dto.CostLine;
 import com.example.rfq.businessmcp.dto.ModelOptions;
 import com.example.rfq.businessmcp.dto.ModelSpec;
-import com.example.rfq.businessmcp.dto.OptionInfo;
 import com.example.rfq.businessmcp.dto.PartsCostResult;
-import com.example.rfq.businessmcp.repository.PartRepository;
-import com.example.rfq.businessmcp.repository.PartRepository.Part;
-import com.example.rfq.businessmcp.repository.ProductRepository;
-import com.example.rfq.businessmcp.repository.ProductRepository.BomRow;
-import java.util.HashMap;
+import java.math.BigDecimal;
+import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 
-/** 모델·옵션 조회와 BOM 전개, 부품 원가 계산. */
+/** 모델·옵션 조회와 옵션 적용 BOM, 부품 원가 계산. */
 @Service
 public class ProductService {
-    static final String BASE = "BASE";
-    static final String OPTION_PREFIX = "OPTION:";
+    private final CatalogClient catalogClient;
 
-    private final ProductRepository productRepository;
-    private final PartRepository partRepository;
-
-    public ProductService(ProductRepository productRepository, PartRepository partRepository) {
-        this.productRepository = productRepository;
-        this.partRepository = partRepository;
+    public ProductService(CatalogClient catalogClient) {
+        this.catalogClient = catalogClient;
     }
 
-    /** 옵션 반영 후 BOM 한 줄. source는 BASE 또는 OPTION:{code}, replacedPartId는 교체되지 않았으면 null. */
-    public record ExpandedPart(
-            String partId,
-            int qtyPerUnit,
-            String source,
-            String replacedPartId) {
-    }
-
-    /** ExpandedPart + parts 테이블의 이름·단가. */
-    public record BomLine(
-            String partId,
-            String partName,
-            int qtyPerUnit,
-            int unitCostKrw,
-            String source,
-            String replacedPartId) {
-    }
-
+    /** 옵션을 적용한 BOM. lines는 part_id 순. */
     public record BomExpansion(
             String modelId,
             List<String> options,
@@ -62,12 +37,16 @@ public class ProductService {
     }
 
     public List<ModelSpec> getModels() {
-        return productRepository.findAllModels();
+        return catalogClient.models().stream()
+                .sorted(Comparator.comparing(Model::modelId))
+                .map(ProductService::toSpec)
+                .toList();
     }
 
     public ModelOptions getOptions(String modelId) {
-        int basePrice = requireBasePrice(modelId);
-        return new ModelOptions(modelId, basePrice, productRepository.findOptions(modelId));
+        Inputs.requireText("model_id", modelId);
+        Model model = catalogClient.model(modelId);
+        return new ModelOptions(model.modelId(), model.basePriceKrw(), model.options() == null ? List.of() : model.options());
     }
 
     public BomResult getBom(String modelId, List<String> optionCodes, Integer qty) {
@@ -85,102 +64,71 @@ public class ProductService {
         return new BomResult(bom.modelId(), bom.options(), productionQty, parts);
     }
 
+    /** BOM 부품마다 단가를 조회한다 (백엔드 BOM 응답에 단가가 없음). */
     public PartsCostResult getPartsCost(String modelId, List<String> optionCodes) {
         BomExpansion bom = expandBom(modelId, optionCodes);
         List<CostLine> breakdown = bom.lines().stream()
-                .map(line -> new CostLine(
-                        line.partId(),
-                        line.qtyPerUnit(),
-                        line.unitCostKrw(),
-                        Math.multiplyExact(line.unitCostKrw(), line.qtyPerUnit())))
+                .map(line -> {
+                    int unitCost = catalogClient.part(line.partId()).unitCostKrw();
+                    return new CostLine(
+                            line.partId(),
+                            line.qtyPerUnit(),
+                            unitCost,
+                            Math.multiplyExact(unitCost, line.qtyPerUnit()));
+                })
                 .toList();
         int total = breakdown.stream().mapToInt(CostLine::costKrw).reduce(0, Math::addExact);
         return new PartsCostResult(bom.modelId(), bom.options(), total, breakdown);
     }
 
-    /** get_bom, get_parts_cost 공통: 모델·옵션 검증 후 옵션의 교체 부품을 반영한 BOM. */
+    /**
+     * get_bom, get_parts_cost 공통: 백엔드의 옵션 적용 BOM.
+     * 모델 존재·옵션 조합 검사와 부품 교체는 백엔드가 한다. bom에 순서 컬럼이 없어 part_id 순으로 고정한다.
+     */
     public BomExpansion expandBom(String modelId, List<String> optionCodes) {
-        requireBasePrice(modelId);
-        // 같은 옵션이 중복으로 오면 하나로 합친다 (입력 순서 유지)
-        List<String> codes = optionCodes == null ? List.of() : List.copyOf(new LinkedHashSet<>(optionCodes));
-        List<OptionInfo> selected = selectAllowedOptions(modelId, codes);
-
-        List<BomRow> base = productRepository.findBom(modelId);
-        if (base.isEmpty()) {
+        Inputs.requireText("model_id", modelId);
+        List<String> codes = normalizeOptions(optionCodes);
+        Bom bom = catalogClient.bom(modelId, codes);
+        if (bom.items() == null || bom.items().isEmpty()) {
             throw new IllegalArgumentException("모델 " + modelId + "의 BOM이 없습니다.");
         }
-        List<ExpandedPart> expanded = applyOptions(base, selected);
-        return new BomExpansion(modelId, codes, withPartInfo(expanded));
+        List<BomLine> lines = bom.items().stream().sorted(Comparator.comparing(BomLine::partId)).toList();
+        return new BomExpansion(modelId, codes, lines);
     }
 
-    /** 옵션 코드가 모델에 허용된 조합(model_options)인지 확인하고 옵션 정보를 돌려준다. */
-    private List<OptionInfo> selectAllowedOptions(String modelId, List<String> codes) {
-        Map<String, OptionInfo> allowed = productRepository.findOptions(modelId).stream()
-                .collect(Collectors.toMap(OptionInfo::optionCode, Function.identity()));
-        return codes.stream().map(code -> {
-            OptionInfo option = allowed.get(code);
-            if (option == null) {
-                throw new IllegalArgumentException(
-                        "모델 " + modelId + "에 허용되지 않은 옵션입니다: " + code + " (허용: " + allowed.keySet() + ")");
-            }
-            return option;
-        }).toList();
-    }
-
-    /** 전개된 부품에 parts 테이블의 이름·단가를 붙인다. */
-    private List<BomLine> withPartInfo(List<ExpandedPart> expanded) {
-        Map<String, Part> parts = partRepository.findParts(expanded.stream().map(ExpandedPart::partId).toList());
-        return expanded.stream().map(e -> {
-            Part part = parts.get(e.partId());
-            if (part == null) {
-                throw new IllegalStateException("parts에 없는 부품입니다: " + e.partId());
-            }
-            return new BomLine(
-                    e.partId(),
-                    part.partName(),
-                    e.qtyPerUnit(),
-                    part.unitCostKrw(),
-                    e.source(),
-                    e.replacedPartId());
-        }).toList();
-    }
-
-    /** 각 옵션의 replaces_part_id를 uses_part_id로 교체한다. qty_per_unit은 유지. */
-    static List<ExpandedPart> applyOptions(List<BomRow> base, List<OptionInfo> options) {
-        Map<String, OptionInfo> byReplacedPart = new HashMap<>();
-        for (OptionInfo option : options) {
-            if (option.replacesPartId() == null && option.usesPartId() == null) {
-                continue; // 부품을 바꾸지 않는 옵션
-            }
-            if (option.replacesPartId() == null || option.usesPartId() == null) {
-                throw new IllegalStateException("옵션 " + option.optionCode() + "의 교체 부품 정보가 불완전합니다.");
-            }
-            OptionInfo previous = byReplacedPart.put(option.replacesPartId(), option);
-            if (previous != null) {
-                throw new IllegalArgumentException("옵션 " + previous.optionCode() + "와 " + option.optionCode()
-                        + "가 같은 부품(" + option.replacesPartId() + ")을 교체하므로 함께 쓸 수 없습니다.");
-            }
-            if (base.stream().noneMatch(row -> row.partId().equals(option.replacesPartId()))) {
-                throw new IllegalStateException("옵션 " + option.optionCode() + "가 교체할 부품 "
-                        + option.replacesPartId() + "이 BOM에 없습니다.");
-            }
+    /** 같은 옵션이 중복으로 오면 하나로 합친다 (입력 순서 유지). 빈 코드는 오류. */
+    static List<String> normalizeOptions(List<String> optionCodes) {
+        if (optionCodes == null) {
+            return List.of();
         }
-        return base.stream().map(row -> {
-            OptionInfo option = byReplacedPart.get(row.partId());
-            if (option == null) {
-                return new ExpandedPart(row.partId(), row.qtyPerUnit(), BASE, null);
-            }
-            return new ExpandedPart(
-                    option.usesPartId(),
-                    row.qtyPerUnit(),
-                    OPTION_PREFIX + option.optionCode(),
-                    row.partId());
-        }).toList();
+        optionCodes.forEach(code -> Inputs.requireText("options의 옵션 코드", code));
+        return List.copyOf(new LinkedHashSet<>(optionCodes));
     }
 
-    private int requireBasePrice(String modelId) {
-        Inputs.requireText("model_id", modelId);
-        return productRepository.findBasePrice(modelId)
-                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 모델입니다: " + modelId));
+    private static ModelSpec toSpec(Model m) {
+        return new ModelSpec(
+                m.modelId(),
+                m.modelName(),
+                m.flowLpm(),
+                m.headKpa(),
+                stripZeros(m.voltageMin()),
+                stripZeros(m.voltageMax()),
+                m.tempMin(),
+                m.tempMax(),
+                m.ipRating(),
+                m.noiseDb(),
+                m.comm(),
+                m.sizeLMm(),
+                m.sizeWMm(),
+                m.sizeHMm(),
+                m.weightKg(),
+                m.basePriceKrw());
+    }
+
+    /** NUMERIC(4,1) 전압(백엔드 응답 9.0)을 명세대로 9로 내보낸다. 13.5처럼 소수가 있으면 유지. */
+    static BigDecimal stripZeros(BigDecimal v) {
+        BigDecimal s = v.stripTrailingZeros();
+        // 10.0은 stripTrailingZeros()가 1E+1이 되므로 scale을 0으로 되돌린다
+        return s.scale() < 0 ? s.setScale(0) : s;
     }
 }

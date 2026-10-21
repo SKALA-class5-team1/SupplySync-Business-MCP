@@ -1,0 +1,8 @@
+{
+  "part_id": "P-MCU-G1",
+  "part_name": "제어칩 (고온용)",
+  "supplier": "세온반도체",
+  "unit_cost_krw": 5300,
+  "lead_time_days": 120,
+  "is_critical": true
+}

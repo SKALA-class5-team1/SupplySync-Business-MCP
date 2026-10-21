@@ -1,0 +1,8 @@
+{
+  "part_id": "P-MTR-BL12",
+  "part_name": "모터",
+  "supplier": "한결모터",
+  "unit_cost_krw": 9500,
+  "lead_time_days": 45,
+  "is_critical": true
+}
