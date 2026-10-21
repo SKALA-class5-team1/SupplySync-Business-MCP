@@ -484,7 +484,7 @@ RFQ 번호로 고객이 업로드한 견적요청서 원문을 가져온다. (SG
 - 원문은 가공하지 않고 그대로 반환한다. 파싱(`rfq_schema.json` 형식 추출)은 SG1 `parse_rfq`의 몫
 - 원문 위치는 `rfqs.file_path`이며 파일은 백엔드가 읽는다. 이 서버는 파일 시스템에 접근하지 않는다
 - 조회라서 `Idempotency-Key` 없음
-- 오류: 404 없는 RFQ → "RFQ를 찾을 수 없음", 415 텍스트가 아닌 파일(PDF 등) → "지원하지 않는 형식" Tool 오류
+- 오류: RFQ 정보 404 → "RFQ를 찾을 수 없음", 원문 404 → "RFQ 원문이 없거나 읽을 수 없음" Tool 오류. 백엔드는 업로드를 `.md`만 받고(아니면 400) 415는 보내지 않는다 (백엔드 담당 확인, 2026-10-21)
 - 응답이 너무 크면 LLM 컨텍스트를 넘칠 수 있다 → 백엔드 응답이 200KB를 넘으면 Tool 오류로 알림 (데모 RFQ는 수 KB)
 
 ### 백엔드와 맞출 계약
@@ -497,7 +497,7 @@ RFQ 번호로 고객이 업로드한 견적요청서 원문을 가져온다. (SG
 | `POST /internal/quotes` | 201 + `{quote_id, status, review_id}` (같은 revision이면 기존 견적) | 400 입력 오류, 404 분석 결과·모델 없음, 409 revision 순서 위반 |
 | `POST /internal/quotes/{quote_id}/register` | 201 신규 / 200 이미 등록 + `{quote_id, status, rfq_status, outcome}` | 404 없음, 409 APPROVED 아님 |
 | `GET /internal/rfqs/{rfqNumber}` | 200 + `{rfq_number, item, file_path, ...}` | 404 없음 |
-| `GET /internal/rfqs/{rfqNumber}/content` | 200 + 원문 텍스트 (`text/markdown`) | 404 없음, 415 텍스트 아님 |
+| `GET /internal/rfqs/{rfqNumber}/content` | 200 + 원문 텍스트 (`text/markdown`) | 404 원문 없음·읽을 수 없음 |
 
 조회 API (도구 1~5, 응답 필드는 Swagger 기준):
 
@@ -556,5 +556,6 @@ P-MCU-G1 incoming_delay_days 36. 정답 파일: `05_expected/5_sg2_supply.json`�
 - **백엔드 `/internal/**` API**: 백엔드 담당 구현 완료, 수정하지 않는다. 실제 백엔드에 연결해 확인하는 일은 남음
 - **읽기 경로**: 교재대로 조회도 백엔드 API를 거치도록 결정 (2026-10-21). DB 조회 전용 계정(`business_mcp_user`)은 더 이상 쓰지 않는다 → 팀에 알리고 Supabase에서 정리할지 결정
 - **위험 코드·부족 수량 계산 위치**: 백엔드 조회 API에 같은 계산이 있으면 그 값을 쓰도록 바꾼다 (규칙은 한 곳에만). 없으면 출력용 파생값으로 이 서버에 둔다
+- **진행 이벤트** (`POST /internal/tasks/{id}/events`): MCP Tool이 아니다. AI 서버가 백엔드로 직접 보낸다 (`SupplySync-AI`의 `get_internal_api_client()`, 백엔드 담당 확정 2026-10-21). 이벤트가 와야 SSE와 NEEDS_CLARIFICATION·WAITING_* 전이가 일어난다. 백엔드 계약: payload `type`(필수, 모르는 값은 400)·`step`·`message`·`trace_url`·`data`, 이미 DONE/FAILED인 작업이면 409. 보내는 노드(interrupt 시점)와 409·5xx 처리는 Agent 팀이 정한다. "Agent는 백엔드를 직접 부르지 않는다"는 업무 데이터 조회·저장(Tool 10개)에 한정된 말이다
 - **rag-mcp**: 별도 서버. `search_docs` Tool 1개 + 원문 Resource `doc://chunks/{chunk_id}` (교재 요건)
 - 필드 이름은 SG 담당자·Agent 쪽 mock 클라이언트와 공유되므로, 변경 시 이 문서를 먼저 갱신

@@ -235,7 +235,7 @@ MCP 공식 명세 방식을 따른다. 예외를 던지면 Spring AI가 `isError
 | 없는 부품·재고 없음 (백엔드 404) | "존재하지 않는 부품입니다: …" / "재고(inventory) 정보가 없는 부품입니다: …" |
 | `check_parts_supply` 입력 오류 | 날짜 형식, 빈 `parts`, 중복, `required_qty <= 0` (백엔드 호출 전에 검사) |
 | 백엔드 409 | "현재 상태에서 불가 …" (`register_quote`는 "승인되지 않은 견적") |
-| 백엔드 404 / 415 (`get_rfq_content`) | "RFQ를 찾을 수 없음" / "지원하지 않는 형식" |
+| 백엔드 404 (`get_rfq_content`) | RFQ 정보: "RFQ를 찾을 수 없음" / 원문: "RFQ 원문이 없거나 읽을 수 없음" |
 | 백엔드 404 (`save_quote`) | "분석 결과 또는 모델을 찾을 수 없음 (save_review를 먼저 호출 …)" |
 | `save_review` 두 호출 중 실패 | "demand(RFQ 요구값) 저장 실패 …" 또는 "demand는 저장됐지만 분석 결과 저장 실패 …" (둘 다 멱등이라 다시 호출하면 됨) |
 | 백엔드 그 밖의 4xx | "백엔드 요청 오류 (코드): 백엔드 message [details]" |
