@@ -13,9 +13,9 @@ AI Agent(LangGraph)가 MCP로 호출하면, 이 서버는 **조회든 변경이�
 - Spring Boot 3.5.16, Java 21, Spring AI 1.1.8 (`spring-ai-starter-mcp-server-webmvc`)
 - `http://127.0.0.1:8101/mcp`, Streamable HTTP, 모든 요청에 `X-Internal-Api-Key` 헤더 필요
 - 백엔드: `SupplySync-BE` (`BACKEND_URL`, 기본 `http://localhost:8080`). 엔드포인트는 BE README와 Swagger(`/swagger-ui.html`, OpenAPI `/v3/api-docs/2-internal`)가 기준이며 **백엔드는 수정하지 않는다.** 이 서버가 맞춘다
-- Tool 9개 구현됨. 6~9는 백엔드 호출로 완료. **1~5는 DB 직접 조회 → 백엔드 조회 API로 전환 작업 중** (아래 "작업 지시")
+- Tool 10개 구현됨. 모두 백엔드 API 호출 (1~5는 2026-10-21에 DB 직접 조회에서 전환, 10번 `get_substitutes` 추가). mock 백엔드로 확인했고, 실제 백엔드 연결 확인(`LiveBackendToolsTest`)은 남음
 
-## 작업 범위: Tool 9개
+## 작업 범위: Tool 10개
 rag-mcp(VectorDB 검색)는 별도 서버라 이 레포 범위가 아니다.
 
 | # | Tool 이름 | 하는 일 | 종류 | 사용 SG |
@@ -29,16 +29,20 @@ rag-mcp(VectorDB 검색)는 별도 서버라 이 레포 범위가 아니다.
 | 7 | `save_quote` | 견적 초안 생성 (DRAFT, revision별) | 쓰기 (백엔드 API) | SG3 |
 | 8 | `register_quote` | 승인된 견적 등록. 되돌리기 어려움 | 쓰기 (백엔드 API) | SG4 |
 | 9 | `get_rfq_content` | RFQ 번호로 고객이 올린 견적요청서 원문 조회 | 읽기 (백엔드 API) | SG1 |
+| 10 | `get_substitutes` | 부품 하나의 대체 부품 후보 조회 (단가 차이, 검증 기간, 재고) | 읽기 (백엔드 API) | SG2 |
 
-팀 노션 「MCP」 페이지 번호와의 대응: 노션 1~8 = 이 문서 1~8, 노션 11 = 이 문서 9 (노션 9·10은 rag-mcp).
+팀 노션 「MCP」 페이지 번호와의 대응: 노션 1~8 = 이 문서 1~8, 노션 11 = 이 문서 9 (노션 9·10은 rag-mcp). 노션 12 = 이 문서 10 (`get_substitutes`, 초기 설계의 대체 부품 조회를 별도 도구로 다시 둔 것).
 
-## 작업 지시: 조회 도구 1~5를 백엔드 API로 전환
+`check_parts_supply`(4)와 `get_substitutes`(10)의 관계: 4는 부족한 부품의 대체 부품까지 한 번에 돌려준다. 10은 Agent가 특정 부품의 대체 후보만 따로 보고 싶을 때(예: 대안 비교 중 다른 부품 확인, 재고 재확인 없이 후보만 조회) 쓴다. 두 도구의 대체 부품 필드명과 계산은 같아야 하므로 **같은 service 메서드를 쓴다**.
+
+## 작업 지시: 조회 도구 1~5를 백엔드 API로 전환 (완료, 2026-10-21)
 1. **백엔드 응답 스키마 확인**: `SupplySync-BE`의 `internal/` 컨트롤러·DTO 또는 실행 중인 서버의 `/v3/api-docs/2-internal`에서 아래 조회 API의 응답 필드를 확인한다. 필드명은 데이터셋 정답지와 같은 snake_case
 2. **`BackendClient`로 조회 호출 추가**: 기존 쓰기 호출과 같은 클라이언트·헤더·타임아웃·오류 변환을 쓴다 (GET, 본문 없음)
 3. **service에서 조합·변환**: 도구별 "백엔드 API" 항목대로 호출하고, 출력은 아래 명세(기존과 동일)로 만든다
 4. **DB 관련 코드·설정 제거**: `repository/`, `spring-boot-starter-jdbc`·`postgresql`·`h2` 의존성, `application.yml`의 `spring.datasource`, `.env.example`의 `DB_*`, `src/test/resources/schema.sql`·`data.sql`, `LiveDatabaseToolsTest`, `BasicConfigurationTest`의 읽기 전용 DB 검사. JDBC 의존성이 남아 있으면 DataSource 자동 설정 때문에 기동이 실패하므로 같이 지운다
 5. **테스트 전환**: 아래 "테스트" 절대로. 기대값(정답 JSON)은 그대로
 6. **문서 갱신**: README(DB 설명 → 백엔드 연결), ARCHITECTURE.md(조회 경로), `.env.example`
+7. **10번 `get_substitutes` 추가** (SG2 요청, 2026-10-21): 4번 `check_parts_supply`는 그대로 둔다 (SG4 재고 재확인이 `available`·`short_qty`·`status`를 쓰고 있음, `approval_registration/graph.py`의 `recheck_supply`). 10번은 아래 명세대로 새로 만들고, 4번의 `substitutes`와 같은 service 메서드를 쓴다
 
 백엔드 값 우선 원칙: 백엔드 응답에 이미 계산된 값이 있으면(예: 가용 재고, 옵션 적용 BOM) **그 값을 그대로 쓰고 다시 계산하지 않는다.** 이 서버에서 계산하는 것은 백엔드에 없는 출력용 파생값(부족 수량, 상태 OK/SHORT, 날짜 차이, 위험 코드, 합계)뿐이다.
 
@@ -230,7 +234,7 @@ rag-mcp(VectorDB 검색)는 별도 서버라 이 레포 범위가 아니다.
 2. `GET /internal/parts/{partId}/inventory`: 재고·입고 예정 (on_hand, allocated, incoming_qty, incoming_date)
 3. SHORT인 부품만 `GET /internal/parts/{partId}/substitutes`: 대체 부품 후보 (validation_days, pin_compatible, ref_chunk_id). 후보마다 1·2를 호출해 단가·재고를 채운다 (응답에 이미 있으면 생략)
 
-호출 수: 데모 기준 부품 6개 × 2 + 부족 1개 × (1 + 후보 1개 × 2) = 15회. 같은 요청 안에서 같은 부품을 두 번 부르지 않게 한다.
+호출 수: 데모 기준 부품 6개 × 2 + 부족 1개 × (대체 후보 1 + 후보 부품 마스터 1) = 14회 (후보 재고는 `/substitutes` 응답의 `available_qty`, 단가 차이는 `unit_cost_diff_krw`를 쓰므로 후보 `/inventory`는 부르지 않는다). 같은 요청 안에서 같은 부품을 두 번 부르지 않게 한다.
 
 필드 계산 (백엔드 응답에 같은 값이 있으면 그 값을 쓴다):
 | 필드 | 출처 / 계산 |
@@ -288,6 +292,46 @@ SG4 재확인: 승인 후 Agent가 `final_plan`(예: `P-MCU-G1` 1,500 + `P-MCU-G
 백엔드 API: `GET /internal/models/{modelId}/bom?options=...` → 부품마다 단가가 응답에 없으면 `GET /internal/parts/{partId}`. 계산: `cost_krw = unit_cost_krw × qty_per_unit`, `parts_cost_krw = Σ cost_krw` (`get_bom`과 같은 service 메서드로 BOM을 가져온다). 오류 조건도 `get_bom`과 동일.
 
 ---
+
+### 10. `get_substitutes`
+부품 하나의 대체 부품 후보를 조회한다. (SG2 대안 비교: 대체 부품 사용 가능일·단가 차이·재고 확인)
+초기 설계(노션 4번 `business_get_substitutes`)를 별도 도구로 다시 둔 것이다. 필드명은 `check_parts_supply`의 `substitutes`와 같게 맞춘다 (초기 설계의 `cost_diff_krw` → `unit_cost_diff_krw`).
+
+백엔드 API:
+1. `GET /internal/parts/{partId}/substitutes`: 대체 부품 후보 (validation_days, pin_compatible, ref_chunk_id)
+2. 원래 부품과 후보마다 `GET /internal/parts/{partId}`(단가·공급사·조달기간), 후보마다 `GET /internal/parts/{partId}/inventory`(재고). 응답에 이미 있으면 생략
+
+```jsonc
+// input
+{
+  "part_id": "P-MCU-G1",          // 필수. 원래 부품
+  "short_qty": 500,               // 선택. 주면 covers_shortage 계산
+  "base_date": "2026-10-19"       // 선택. 없으면 오늘(Asia/Seoul). usable_date 계산 기준
+}
+
+// output
+{
+  "part_id": "P-MCU-G1",
+  "part_name": "제어칩 (고온용)",
+  "unit_cost_krw": 5300,
+  "substitutes": [
+    {
+      "substitute_part_id": "P-MCU-G1-ALT", "part_name": "제어칩 (고온용, 대체)", "supplier": "누리칩스",
+      "available": 3000, "covers_shortage": true,
+      "unit_cost_krw": 5600, "unit_cost_diff_krw": 300,
+      "validation_days": 14, "usable_date": "2026-11-02",
+      "lead_time_days": 30, "pin_compatible": true, "ref_chunk_id": "alt-002"
+    }
+  ]
+}
+```
+- `available`: 후보 부품의 `on_hand − allocated` (백엔드 재고 응답에 가용 값이 있으면 그 값)
+- `unit_cost_diff_krw`: 후보 단가 − 원래 부품 단가
+- `usable_date`: `base_date + validation_days`
+- `covers_shortage`: `short_qty`를 줬을 때만 `available >= short_qty`, 안 주면 `null`
+- 대체 후보가 없으면 `substitutes: []` (오류 아님)
+- 오류: 없는 `part_id`(백엔드 404), `short_qty <= 0`, 날짜 형식 오류
+- 힌트: `readOnlyHint=true`, `idempotentHint=true`
 
 ### 백엔드 API Tool 공통 (6~9)
 
@@ -464,7 +508,7 @@ RFQ 번호로 고객이 업로드한 견적요청서 원문을 가져온다. (SG
 | `GET /internal/models/{modelId}/bom?options=…` | get_bom, get_parts_cost | 404 없는 모델, 400 붙일 수 없는 옵션 |
 | `GET /internal/parts/{partId}` | check_parts_supply, (get_bom, get_parts_cost 보충) | 404 없는 부품 |
 | `GET /internal/parts/{partId}/inventory` | check_parts_supply | 404 |
-| `GET /internal/parts/{partId}/substitutes` | check_parts_supply (SHORT일 때만) | 404 |
+| `GET /internal/parts/{partId}/substitutes` | check_parts_supply (SHORT일 때만), get_substitutes | 404 |
 
 백엔드 담당과 남은 것: `evidence` 저장 (백엔드 DTO에 필드 추가)
 
@@ -497,7 +541,8 @@ P-MCU-G1 incoming_delay_days 36. 정답 파일: `05_expected/5_sg2_supply.json`�
 - 조회 도구 1~5도 `MockRestServiceServer`로 테스트한다. 백엔드 응답 fixture(JSON)는 v2.2 시드 값으로 `src/test/resources/backend/`에 두고(Swagger 응답 형식 그대로), 도구 출력은 위 기대값·정답 JSON과 비교한다 (기존 기대값 재사용)
 - 확인할 것: 호출 경로·쿼리(`options=OPT-HT,OPT-IP9K`)·`X-Internal-Api-Key` 헤더, 부족 부품에만 `/substitutes` 호출, 같은 부품 중복 호출 없음, 404·400 → Tool 오류 메시지
 - 계산(부족 수량, 상태, 날짜, 위험 코드, 합계)은 service 순수 메서드 단위 테스트 유지
-- `BasicConfigurationTest`: API 키 검사·Tool 9개 노출만 확인 (DB 설정 검사 삭제)
+- `BasicConfigurationTest`: API 키 검사·Tool 10개 노출만 확인 (DB 설정 검사 삭제)
+- `get_substitutes`: `P-MCU-G1`, `short_qty` 500, `base_date` 2026-10-19 → 위 예시와 같은 값. `check_parts_supply`의 P-MCU-G1 `substitutes`와 필드·값이 완전히 같은지 비교. 대체 후보 없는 부품(예: `P-MTR-BL12`) → `substitutes: []`
 - 백엔드 API Tool(6~9) 테스트: `MockRestServiceServer`로 백엔드 응답을 흉내 내고 확인할 것
   - `get_rfq_content`: mock 원문 응답(text/markdown)에 v2.2 `01_rfq/RFQ_HB-EV7-EWP-001.md` 내용을 넣고 그대로 반환되는지, 404 → Tool 오류
   - 요청 경로·메서드·`X-Internal-Api-Key` 헤더·body가 명세대로 나가는지, `register_quote`에만 `Idempotency-Key`가 붙는지
