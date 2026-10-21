@@ -70,7 +70,7 @@ mvn test
 기본 테스트는 네트워크 없이 돕니다.
 - 설정: 키가 없거나 틀린 요청 차단, 올바른 키로 MCP 초기화, Tool 10개 등록
 - 조회 Tool: `MockRestServiceServer`가 `src/test/resources/backend/`의 백엔드 응답 fixture(v2.2 **예시** 시드, 백엔드 응답 형식 그대로)를 돌려주고, MCP `tools/call` 결과를 정답 파일(`src/test/resources/expected/`)과 비교합니다. 호출 경로·쿼리·헤더, 부족한 부품에만 대체 부품 조회, 같은 부품 중복 호출 없음도 확인합니다
-- 쓰기·RFQ 원문 Tool: 요청 경로·헤더·본문과 오류 변환(400 details, 404, 409, 415, 5xx, 타임아웃, 200KB 초과)을 확인합니다
+- 쓰기·RFQ 원문 Tool: 요청 경로·헤더·본문과 오류 변환(400 details, 404, 409, 5xx, 타임아웃, 200KB 초과)을 확인합니다
 
 실제 백엔드에서 같은 기대값을 확인하려면 백엔드를 `SPRING_PROFILES_ACTIVE=demo`로 띄우고(v2.2 시드 적재) `.env`의 `BACKEND_URL`·`INTERNAL_API_KEY`를 맞춘 뒤 실행합니다. 조회 Tool과 `get_rfq_content`만 확인하고, 데이터를 바꾸는 쓰기 Tool은 제외합니다.
 

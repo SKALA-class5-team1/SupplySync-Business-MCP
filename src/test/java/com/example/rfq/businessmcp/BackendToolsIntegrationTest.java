@@ -1,6 +1,6 @@
 /*
  * [테스트] 백엔드 API Tool 4개 통합 테스트. MockRestServiceServer로 백엔드를 흉내 낸다.
- * 요청 경로·헤더·본문·호출 순서, 응답 전달, 오류 변환(400 details·404·409·415·500·타임아웃·200KB 초과), Tool 표시(hint)를 확인한다.
+ * 요청 경로·헤더·본문·호출 순서, 응답 전달, 오류 변환(400 details·404·409·500·타임아웃·200KB 초과), Tool 표시(hint)를 확인한다.
  */
 package com.example.rfq.businessmcp;
 
@@ -327,15 +327,15 @@ class BackendToolsIntegrationTest {
     void getRfqContentErrors() {
         var args = Map.<String, Object>of("rfq_number", "HB-NONE");
         String info = BACKEND + "/internal/rfqs/HB-NONE";
-        String infoBody = "{\"rfq_number\": \"HB-NONE\", \"file_path\": \"01_rfq/HB-NONE.pdf\"}";
+        String infoBody = "{\"rfq_number\": \"HB-NONE\", \"file_path\": \"01_rfq/HB-NONE.md\"}";
 
         backend.expect(requestTo(info)).andRespond(withStatus(HttpStatus.NOT_FOUND));
         assertThat(mcp.callError("get_rfq_content", args)).contains("RFQ를 찾을 수 없음", "HB-NONE");
 
         backend.reset();
         backend.expect(requestTo(info)).andRespond(withSuccess(infoBody, MediaType.APPLICATION_JSON));
-        backend.expect(requestTo(info + "/content")).andRespond(withStatus(HttpStatus.UNSUPPORTED_MEDIA_TYPE));
-        assertThat(mcp.callError("get_rfq_content", args)).contains("지원하지 않는 형식");
+        backend.expect(requestTo(info + "/content")).andRespond(withStatus(HttpStatus.NOT_FOUND));
+        assertThat(mcp.callError("get_rfq_content", args)).contains("RFQ 원문이 없거나 읽을 수 없음", "HB-NONE");
 
         backend.reset();
         backend.expect(requestTo(info)).andRespond(withSuccess(infoBody, MediaType.APPLICATION_JSON));

@@ -100,20 +100,20 @@ public class BackendService {
                 Map.of(409, CONFLICT + ": 승인되지 않은 견적입니다."));
     }
 
-    /** RFQ 정보(GET /internal/rfqs/{rfqNumber})와 원문(GET .../content, text/markdown)을 합친다. */
+    /**
+     * RFQ 정보(GET /internal/rfqs/{rfqNumber})와 원문(GET .../content, text/markdown)을 합친다.
+     * 백엔드는 .md만 업로드받고, 원문이 없거나 읽을 수 없으면 content가 404다 (415는 보내지 않음).
+     */
     public RfqContent getRfqContent(String rfqNumber) {
         Inputs.requireText("rfq_number", rfqNumber);
-        Map<Integer, String> statusMessages = Map.of(
-                404, "RFQ를 찾을 수 없음: " + rfqNumber,
-                415, "지원하지 않는 형식: 텍스트가 아닌 RFQ 파일입니다.");
         RfqInfo info = backendClient.get(
                 "/internal/rfqs/{rfqNumber}", rfqNumber,
                 RfqInfo.class,
-                statusMessages);
+                Map.of(404, "RFQ를 찾을 수 없음: " + rfqNumber));
         String content = backendClient.get(
                 "/internal/rfqs/{rfqNumber}/content", rfqNumber,
                 String.class,
-                statusMessages);
+                Map.of(404, "RFQ 원문이 없거나 읽을 수 없음: " + rfqNumber));
         return new RfqContent(
                 info.rfqNumber(),
                 info.item(),
