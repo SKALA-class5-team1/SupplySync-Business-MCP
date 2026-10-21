@@ -33,10 +33,10 @@ flowchart LR
 | 3 | `get_bom` | 모델+옵션 기준 BOM 전개 → 부품별 필요 수량 | DB `bom`, `options`, `parts` | readOnly | SG2, SG4 |
 | 4 | `check_parts_supply` | 부품별 재고·부족·입고·신규 발주 일정·위험 코드·대체 부품 | DB `parts`, `inventory`, `part_substitutes` | readOnly | SG2, SG4 |
 | 5 | `get_parts_cost` | 모델+옵션 기준 부품 원가 합계와 내역 | DB (get_bom과 같은 전개) | readOnly | SG3 |
-| 6 | `save_review` | SG1·SG2 분석 결과 저장 (upsert) | 백엔드 `PUT /internal/reviews/{thread_id}` | idempotent | SG1, SG2 |
-| 7 | `save_quote` | 견적 초안 저장 (DRAFT, upsert) | 백엔드 `PUT /internal/quotes/{thread_id}` | idempotent | SG3 |
+| 6 | `save_review` | SG1·SG2 분석 결과 저장 (upsert). `demand`가 있으면 RFQ 요구값도 저장 | 백엔드 `PATCH /internal/rfqs/{rfqNumber}`(demand 있을 때) → `PUT /internal/rfq-reviews` | idempotent | SG1, SG2 |
+| 7 | `save_quote` | 견적 초안 생성 (DRAFT, 같은 revision이면 기존 견적) | 백엔드 `POST /internal/quotes` | idempotent | SG3 |
 | 8 | `register_quote` | 승인된 견적 등록. 되돌리기 어려움 | 백엔드 `POST /internal/quotes/{quote_id}/register` | **destructive**, idempotent | SG4 |
-| 9 | `get_rfq_content` | RFQ 원문 조회 (가공 없이 그대로) | 백엔드 `GET /internal/rfqs/{rfqNumber}/content` | readOnly | SG1 |
+| 9 | `get_rfq_content` | RFQ 원문 조회 (가공 없이 그대로) | 백엔드 `GET /internal/rfqs/{rfqNumber}` + `.../content`(text/markdown) | readOnly | SG1 |
 
 원칙: Tool은 **사실(수량·날짜·비용)과 데이터에서 바로 나오는 위험 표시만** 반환한다. 대안 비교·추천은 Agent가 한다.
 
@@ -126,15 +126,16 @@ SupplySync-Business-MCP/
     │   │   ├── ProductRepository.java    models, options, model_options, bom
     │   │   └── PartRepository.java       parts, inventory, part_substitutes
     │   ├── client/
-    │   │   ├── BackendClient.java        get/put/post, 타임아웃, 200KB 제한, 상태 → 오류 변환
+    │   │   ├── BackendClient.java        get/put/patch/post, 타임아웃, 200KB 제한, 상태 → 오류 변환
     │   │   └── BackendException.java     Tool 오류로 전달되는 예외
-    │   └── dto/                          Tool 입출력 record 18개
+    │   └── dto/                          Tool 입출력 record 20개
     │       ├── ModelSpec, ModelOptions, OptionInfo                     get_models, get_options
     │       ├── BomResult, BomPart                                      get_bom
     │       ├── PartRequirement, SupplyCheckResult, PartSupply, SubstituteSupply   check_parts_supply
     │       ├── PartsCostResult, CostLine                               get_parts_cost
     │       ├── SaveReviewRequest/Result, SaveQuoteRequest/Result       save_review, save_quote
-    │       └── RegisterQuoteRequest/Result, RfqContent                 register_quote, get_rfq_content
+    │       ├── RfqDemand                                               save_review의 demand (PATCH 본문)
+    │       └── RegisterQuoteRequest/Result, RfqInfo, RfqContent        register_quote, get_rfq_content
     ├── main/resources/application.yml    서버·DB·MCP·백엔드 설정 (값은 .env)
     └── test/
         ├── java/.../McpTestClient.java                 테스트 공용 MCP 클라이언트 (연결·호출·정답 파일 읽기)
@@ -186,7 +187,7 @@ sequenceDiagram
     T->>S: registerQuote
     S->>C: POST /internal/quotes/{quote_id}/register<br/>Idempotency-Key: {quote_id}:register
     C->>B: X-Internal-Api-Key: INTERNAL_API_KEY
-    B-->>C: 200 {quote_id, status, rfq_status, registered_at}<br/>또는 409 / 404 / 5xx
+    B-->>C: 201/200 {quote_id, status, rfq_status, outcome}<br/>또는 409 / 404 / 5xx
     C-->>A: 결과 그대로, 또는 Tool 오류 메시지
 ```
 
@@ -228,7 +229,9 @@ MCP 공식 명세 방식을 따른다. 예외를 던지면 Spring AI가 `isError
 | `check_parts_supply` 입력 오류 | 날짜 형식, 빈 `parts`, 없는 `part_id`, 재고 행 없음, 중복, `required_qty <= 0` |
 | 백엔드 409 | "현재 상태에서 불가 …" (`register_quote`는 "승인되지 않은 견적") |
 | 백엔드 404 / 415 (`get_rfq_content`) | "RFQ를 찾을 수 없음" / "지원하지 않는 형식" |
-| 백엔드 그 밖의 4xx | "백엔드 요청 오류 (코드): 백엔드 메시지" |
+| 백엔드 404 (`save_quote`) | "분석 결과 또는 모델을 찾을 수 없음 (save_review를 먼저 호출 …)" |
+| `save_review` 두 호출 중 실패 | "demand(RFQ 요구값) 저장 실패 …" 또는 "demand는 저장됐지만 분석 결과 저장 실패 …" (둘 다 멱등이라 다시 호출하면 됨) |
+| 백엔드 그 밖의 4xx | "백엔드 요청 오류 (코드): 백엔드 message [details]" |
 | 백엔드 5xx·연결 실패·타임아웃 | "백엔드 오류 …" |
 | 백엔드 응답 200KB 초과 | 크기 초과 오류 |
 
